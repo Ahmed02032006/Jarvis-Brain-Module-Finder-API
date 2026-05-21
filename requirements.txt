@@ -1,5 +1,6 @@
 fastapi==0.104.1
-langchain-groq==0.0.7
+langchain-groq==0.2.0
+langchain==0.1.0
 langchain-core==0.1.33
 python-dotenv==1.0.0
 httpx==0.25.2
