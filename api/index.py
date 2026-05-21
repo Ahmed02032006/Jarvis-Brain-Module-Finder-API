@@ -5,7 +5,6 @@ import os
 from dotenv import load_dotenv
 from langchain_groq import ChatGroq
 from langchain_core.messages import HumanMessage, SystemMessage
-import asyncio
 
 # Load environment variables
 load_dotenv()
@@ -75,7 +74,6 @@ Your task is to classify the user's query into ONE of these modules:
    - Automating file operations
    - Running scripts or commands
    - Setting up workflows
-   - Any task that involves automation of processes
 
 2. "AI_BASED" - Tasks like:
    - Text generation or writing
@@ -83,8 +81,6 @@ Your task is to classify the user's query into ONE of these modules:
    - Translation between languages
    - Code generation or debugging
    - Creative writing or content creation
-   - Data analysis or predictions
-   - Any task that requires AI/ML capabilities
 
 3. "VISION" - Tasks like:
    - Image recognition or classification
@@ -92,21 +88,18 @@ Your task is to classify the user's query into ONE of these modules:
    - OCR (text extraction from images)
    - Face recognition
    - Video analysis
-   - Any task involving visual processing
 
 4. "MEMORY" - Tasks like:
    - Remembering information for later
    - Recalling past conversations
    - Storing user preferences
    - Contextual recall of previous interactions
-   - Any task that requires memory storage/retrieval
 
 5. "INTERNET" - Tasks like:
    - Searching the web for information
    - Scraping data from websites
    - Checking news or updates
    - Retrieving real-time information
-   - Any task that requires internet access
 
 6. "SECURITY" - Tasks like:
    - Password management
@@ -114,16 +107,13 @@ Your task is to classify the user's query into ONE of these modules:
    - Authentication or authorization
    - Security monitoring
    - Vulnerability checking
-   - Any task related to security
 
 7. "UNKNOWN" - Tasks that don't fit any of the above or are unclear
 
 IMPORTANT RULES:
 - Select ONLY ONE module that BEST fits the query
-- If multiple modules could apply, choose the PRIMARY one
 - Respond in this exact format: "MODULE: [module_name]"
-- Do not add any other text or explanation
-- Keep the module name exactly as written above (UPPERCASE)""")
+- Do not add any other text or explanation""")
     
     user_prompt = HumanMessage(content=f"User Query: {query}")
     
@@ -131,7 +121,6 @@ IMPORTANT RULES:
         response = llm.invoke([system_prompt, user_prompt])
         module_name = response.content.strip().replace("MODULE:", "").strip()
         
-        # Ensure valid module name
         if module_name not in POSSIBLE_MODULES:
             module_name = "UNKNOWN"
     except Exception as e:
@@ -140,7 +129,7 @@ IMPORTANT RULES:
     
     return module_name
 
-# Root endpoint - API info
+# Root endpoint
 @app.get("/")
 async def root():
     return {
@@ -180,7 +169,6 @@ async def identify_module(request: QueryRequest):
         raise HTTPException(status_code=400, detail="Query cannot be empty")
     
     try:
-        # Process query
         query = request.query.strip()
         module = module_identifier_node(query)
         
@@ -192,37 +180,3 @@ async def identify_module(request: QueryRequest):
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error processing query: {str(e)}")
-
-# Vercel serverless handler
-async def handler(request, *args, **kwargs):
-    """Vercel serverless function handler"""
-    from fastapi.responses import JSONResponse
-    
-    # Handle OPTIONS for CORS
-    if request.method == "OPTIONS":
-        return JSONResponse(
-            content={},
-            headers={
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-                "Access-Control-Allow-Headers": "Content-Type",
-            }
-        )
-    
-    # Regular request handling
-    from fastapi.middleware.cors import CORSMiddleware
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-    
-    # This is for Vercel serverless
-    return await app(request, *args, **kwargs)
-
-# Export for Vercel serverless
-app = app
-
-# First Commit
