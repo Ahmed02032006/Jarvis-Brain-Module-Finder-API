@@ -22,8 +22,6 @@ class ModuleResponse(BaseModel):
     module: str
     possible_modules: List[str]
     status: str
-    ai_based: Optional[bool] = False  # New field to indicate if module is AI_BASED
-    ai_response: Optional[str] = None  # New field for AI-generated response
 
 class HealthResponse(BaseModel):
     status: str
@@ -42,9 +40,9 @@ POSSIBLE_MODULES = [
 
 # Module descriptions for documentation
 MODULE_DESCRIPTIONS = {
-    "AUTOMATION": "Email, messages, scheduling, file operations, scripts, workflows",
+    "AUTOMATION": "Email, messages, scheduling, file operations, scripts, workflows, taking screenshots",
     "AI_BASED": "Text generation, summarization, translation, code generation, analysis",
-    "VISION": "Image recognition, object detection, OCR, face recognition, video analysis",
+    "VISION": "Image recognition, object detection, OCR, face recognition, video analysis (but NOT taking screenshots)",
     "MEMORY": "Information storage, recall, preferences, context retention",
     "INTERNET": "Web search, data scraping, news, real-time information",
     "SECURITY": "Password management, encryption, authentication, monitoring",
@@ -54,50 +52,13 @@ MODULE_DESCRIPTIONS = {
 # Initialize Groq LLM (with error handling)
 try:
     llm = ChatGroq(
-        temperature=0.7,  # Increased for creative responses
+        temperature=0,
         model_name="llama-3.3-70b-versatile",
         groq_api_key=os.getenv("GROQ_API_KEY")
     )
 except Exception as e:
     print(f"Error initializing LLM: {e}")
     llm = None
-
-# Function to generate AI response for AI_BASED modules
-def generate_ai_response(query: str, refined_query: str) -> str:
-    """Generate response for AI_BASED module queries"""
-    
-    if llm is None:
-        return "AI service is not available. Please check GROQ_API_KEY configuration."
-    
-    # Different prompts based on query type
-    system_prompt = SystemMessage(content="""You are JARVIS, an intelligent AI assistant. 
-Your task is to directly fulfill the user's request without any explanation about modules or identification.
-
-IMPORTANT RULES:
-1. For story generation: Write a creative, engaging story based on the user's request
-2. For poem generation: Write a beautiful poem matching the requested style/topic
-3. For code generation: Provide working code with brief comments
-4. For summarization: Provide a concise summary of the given text
-5. For translation: Provide accurate translation
-6. For general questions: Provide helpful, accurate answers
-7. Be direct and conversational
-8. Don't mention that you're identifying modules or anything about the API
-9. Just fulfill the request naturally
-
-Examples:
-- User: "generate a short story about a dragon" → You: Write a short story about a dragon
-- User: "write a poem about love" → You: Write a poem about love
-- User: "what is artificial intelligence" → You: Explain AI simply
-- User: "summarize this text: [text]" → You: Provide summary""")
-    
-    user_prompt = HumanMessage(content=f"User Request: {refined_query}\nOriginal Query: {query}\n\nFulfill this request directly:")
-    
-    try:
-        response = llm.invoke([system_prompt, user_prompt])
-        return response.content.strip()
-    except Exception as e:
-        print(f"Error generating AI response: {e}")
-        return f"I encountered an error while processing your request: {str(e)}"
 
 # Function to correct spelling and refine query based on module
 def refine_query(query: str, module: str) -> str:
@@ -119,6 +80,8 @@ Examples:
 - "i need to send email to john" → "send email to john"
 - "please schedule meeting for tomorrow" → "schedule meeting for tomorrow"
 - "can you close the calculator app" → "close calculator app"
+- "take a screenshot" → "take screenshot"
+- "capture my screen" → "take screenshot"
 
 Return ONLY the refined query, no additional text.""")
 
@@ -134,21 +97,6 @@ Examples:
 - "Who is the president of usa" → "president of usa"
 - "Where is taj mahal located" → "taj mahal location"
 - "How to make pizza" → "make pizza"
-
-Return ONLY the refined query, no additional text.""")
-
-    elif module == "AI_BASED":
-        system_prompt = SystemMessage(content="""You are a query refiner for AI-based tasks.
-Your job is to:
-1. Correct any spelling mistakes in the user's query
-2. Keep the original request for generation/creation
-3. Make the request clear and specific
-
-Examples:
-- "generat a short story about a brave knight" → "generate a short story about a brave knight"
-- "write me a poem about nature" → "write a poem about nature"
-- "creat python code for calculator" → "create python code for a calculator"
-- "sumarize this text: [text]" → "summarize this text: [text]"
 
 Return ONLY the refined query, no additional text.""")
 
@@ -192,15 +140,15 @@ Your task is to classify the user's query into ONE of these modules:
    - Automating file operations
    - Running scripts or commands
    - Setting up workflows
+   - Taking screenshots or screen capture
+   - Recording screen
 
 2. "AI_BASED" - Tasks like:
-   - Text generation or writing (stories, poems, essays)
+   - Text generation or writing
    - Summarization or analysis
    - Translation between languages
    - Code generation or debugging
    - Creative writing or content creation
-   - Answering questions that need reasoning
-   - Any request asking to "generate", "write", "create", "tell a story", "compose"
 
 3. "VISION" - Tasks like:
    - Image recognition or classification
@@ -208,6 +156,8 @@ Your task is to classify the user's query into ONE of these modules:
    - OCR (text extraction from images)
    - Face recognition
    - Video analysis
+   - Analyzing existing screenshots or images
+   - But NOT taking screenshots (that belongs to AUTOMATION)
 
 4. "MEMORY" - Tasks like:
    - Remembering information for later
@@ -232,6 +182,8 @@ Your task is to classify the user's query into ONE of these modules:
 
 IMPORTANT RULES:
 - Select ONLY ONE module that BEST fits the query
+- Taking screenshots, screen capture, or recording screen ALWAYS goes to AUTOMATION, not VISION
+- VISION is for analyzing/processing existing images, not for capturing them
 - Respond in this exact format: "MODULE: [module_name]"
 - Do not add any other text or explanation""")
     
@@ -254,19 +206,19 @@ IMPORTANT RULES:
 async def root():
     return {
         "name": "JARVIS Brain API",
-        "version": "1.2.0",
-        "description": "Module Identification API with AI Response Generation for JARVIS",
+        "version": "1.1.0",
+        "description": "Module Identification API with Query Refinement for JARVIS",
         "features": [
             "Spelling correction",
             "Query refinement based on module type",
-            "AI response generation for AI_BASED modules",
             "Removes question words for search queries",
-            "Converts requests to actionable commands for automation"
+            "Converts requests to actionable commands for automation",
+            "Screenshot tasks routed to AUTOMATION (not VISION)"
         ],
         "endpoints": [
             {"path": "/", "method": "GET", "description": "API information"},
             {"path": "/health", "method": "GET", "description": "Health check"},
-            {"path": "/identify", "method": "POST", "description": "Identify module and generate AI response if needed"},
+            {"path": "/identify", "method": "POST", "description": "Identify module and refine query"},
             {"path": "/modules", "method": "GET", "description": "List all possible modules"}
         ]
     }
@@ -304,24 +256,11 @@ async def identify_module(request: QueryRequest):
         # Then refine the query based on the identified module
         refined_query = refine_query(original_query, module)
         
-        # Initialize response
-        response_data = {
-            "user_query": refined_query,
-            "module": module,
-            "possible_modules": POSSIBLE_MODULES,
-            "status": "success",
-            "ai_based": (module == "AI_BASED"),
-            "ai_response": None
-        }
-        
-        # If module is AI_BASED, generate AI response
-        if module == "AI_BASED" and llm is not None:
-            ai_response = generate_ai_response(original_query, refined_query)
-            response_data["ai_response"] = ai_response
-        elif module == "AI_BASED" and llm is None:
-            response_data["ai_response"] = "AI service unavailable. Please check configuration."
-        
-        return ModuleResponse(**response_data)
-        
+        return ModuleResponse(
+            user_query=refined_query,  # Returns refined query instead of original
+            module=module,
+            possible_modules=POSSIBLE_MODULES,
+            status="success"
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error processing query: {str(e)}")
